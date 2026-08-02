@@ -8,3 +8,11 @@ for the sake of both textures and the pixel buffer a pixel in this rendered is d
 # Model
 A model will be taken as a struct containing an array of verticies, an array of faces, an array of UV co-ordinates and at least one texture (we'll see how many more as we go on)
 
+
+
+
+
+
+## references
+# aligned memory allocator implementation adapted from
+https://stackoverflow.com/questions/60169819/modern-approach-to-making-stdvector-allocate-aligned-memory
