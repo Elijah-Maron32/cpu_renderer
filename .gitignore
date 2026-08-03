@@ -1,5 +1,6 @@
 build/
 CMakeFiles/
+include/external
 Makefile
 CMakeCache.txt
 cmake_install.cmake

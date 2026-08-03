@@ -11,7 +11,7 @@ file(GLOB_RECURSE RENDERER_SOURCES "source/*.cpp")
 add_executable(ARM3Drenderer ${RENDERER_HEADERS} ${RENDERER_SOURCES})
 
 
-target_include_directories(ARM3Drenderer PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include" "${SDL2_INCLUDE_DIRS}")
+target_include_directories(ARM3Drenderer PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include" "${CMAKE_CURRENT_SOURCE_DIR}/include/external" "${SDL2_INCLUDE_DIRS}")
 target_link_libraries(ARM3Drenderer PUBLIC
     ${SDL2_LIBRARIES}
 )

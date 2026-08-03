@@ -2,6 +2,10 @@
 #include "SDL.h"
 #include <chrono>
 #include <renderer/modelImporter.hpp>
+#include <renderer/math.hpp>
+#include <cmath>
+#include <numbers>
+#include <renderer/rasterizer.hpp>
 
 #define FPS 60.0
 #define TARGET_DT 1.0 / FPS
@@ -10,26 +14,73 @@ using namespace renderer;
 
 int main(int argc, char* args[]){
 
-    renderer::vec4 const cameraPos = {0,1,5,1};
+    renderer::vec4 const cameraPos = {0,1,1,1};
+    // renderer::vec4 const cameraDir = {0,0,-1,0};
+    float const fov = 90, near = 1, far = 5;
+    float aspectRatio = 16.0/9.0;
 
     renderer::model m;
 
-    renderer::parseOBJFile("cube.obj", m.vertexPositions, m.faceVerticies);
+    std::vector<uint32_t> texture;
+
+    parsePNG("necoarctexture.png", texture);
+
+    renderer::parseOBJFile("necoarc.obj", m.vertexPositions, m.faceVerticies, m.vertexUVs);
+
+    //std::cout << m.vertexPositions.size() << "," << m.faceVerticies.size() << "\n";
+
+    m.transform = {
+        1, 0, 0, 0,
+        0, 1, 0, 0,
+        0, 0, 1, 0,
+        0, 0, 0, 1
+    };
+    renderer::vec4 translation = {0, 0, -2, 1};
+
+
+    //m.transform = renderer::applyScaling(m.transform, 1);
+    //m.transform = renderer::applyRotationX(m.transform, std::numbers::pi/-2.0);
+    m.transform = applyTranslation(m.transform, translation);
+
 
     std::cout << "output\n";
+    
+    renderer::AlignedVec4 worldVerts = renderer::localToTransform(m.transform, m.vertexPositions);
 
-    for (renderer::vec4 element : m.vertexPositions)
-    std::cout << element['x'] << "," << element['g']  << "," << element['B'] << "," << element['W'] << " ";
+    renderer::AlignedVec4 projectedVerts = renderer::getProjectedCoordinates(
+        worldVerts, cameraPos, fov, near, far, aspectRatio);
 
-    std::cout << "\n";
+    renderer::AlignedVec3 rasterVerts = getRasterCoords(projectedVerts, 1920, 1080);
 
-    for (renderer::Face element : m.faceVerticies)
-    std::cout << element[0] << "," << element[1]  << "," << element[2] << " ";
+    // for (renderer::vec4 element : projectedVerts)
+    // std::cout << element['x'] << "," << element['g']  << "," << element['B'] << "," << element['W'] << " ";
 
-    std::cout << "\n";
+    // for (renderer::vec3 element : rasterVerts)
+    // std::cout << element.x << "," << element.y << "," << element.z << "\n";
+    
+    renderer::scene stuff;
+    renderer::rasterizer raster;
+    stuff.cameraPos = cameraPos;
+    stuff.fov = fov;
+    stuff.far = far;
+    stuff.near = near;
+    stuff.models = {m};
+    
+    int width = 1280;
+    int height = 720;
+    
+    std::vector<uint32_t> points = raster.rasterize(stuff, height, width);
+    //for (uint32_t pixel: points)
+    // if(pixel != 0xFFFFFFFF)
+    // std::cout <<  pixel << "\n";
 
-    int width = 1920;
-    int height = 1080;
+    //std::cout << "\n";
+
+    // for (renderer::Face element : m.faceVerticies)
+    // std::cout << element[0] << "," << element[1]  << "," << element[2] << " ";
+
+    //std::cout << "\n";
+
     
     SDL_Window* window = SDL_CreateWindow("Terraria",
         SDL_WINDOWPOS_UNDEFINED,
@@ -44,6 +95,8 @@ int main(int argc, char* args[]){
 
     using clock = std::chrono::high_resolution_clock;
     auto prev_frame = clock::now();
+    auto runtime = clock::now();
+
 
     bool running = true;
     while (running)
@@ -82,11 +135,17 @@ int main(int argc, char* args[]){
 
         auto now = clock::now();
 		float dt = std::chrono::duration_cast<std::chrono::duration<float>>(now - prev_frame).count();
-		prev_frame = now;
+		float rt = std::chrono::duration_cast<std::chrono::duration<float>>(now - runtime).count();
+        prev_frame = now;
+        
 
         //std::cout << dt << std::endl;
-
-        std::fill_n((uint32_t *)draw_surface->pixels, width * height, 0xff0000ff);
+        
+        
+        stuff.models[0].transform = applyTranslation(stuff.models[0].transform, {0, static_cast<float>(std::sin(rt*(std::numbers::pi))) * dt, 0, 1});
+        stuff.models[0].transform = applyRotationY(stuff.models[0].transform, (std::numbers::pi/2) * dt);
+        std::vector<uint32_t> colorBuffer = raster.rasterize(stuff, height, width);
+        std::copy(colorBuffer.data(), colorBuffer.data() + (height*width), (uint32_t *)draw_surface->pixels);
 
         SDL_Rect rect{.x = 0, .y = 0, .w = width, .h = height};
         SDL_BlitSurface(draw_surface, &rect, SDL_GetWindowSurface(window), &rect);

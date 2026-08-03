@@ -1,3 +1,4 @@
+#pragma once
 #include <vector>
 #include <array>
 #include <limits>
@@ -86,6 +87,34 @@ namespace renderer {
         }
     }; //___attribute__((alligned(128)));
 
+    struct vec3 {
+        float x;
+        float y;
+        float z;
+
+        float& operator[](char const component) {
+            switch (component) {
+                case 'x':
+                case 'X':
+                case 'r':
+                case 'R':
+                    return x;
+                case 'y':
+                case 'Y':
+                case 'g':
+                case 'G':
+                    return y;
+                case 'z':
+                case 'Z':
+                case 'b':
+                case 'B':
+                    return z;
+                default:
+                    throw std::out_of_range("Accesing non-existent vec4 component");
+            }
+        }
+    };
+
     //a simple 2 float vector
     //I choose to do it this way instead of with an array so I could index by xy/uv component
     struct vec2
@@ -127,9 +156,14 @@ namespace renderer {
         //Normal?
     };
 
-    using AlignedVec4 = std::vector<vec4, AlignedAllocator<vec4, 16>>;//AlignedVector<vec4, 16>;
+    struct Face {
+        std::array<int, 3> Verts;
+        std::array<int, 3> UVs;
+    };
+
+    using AlignedVec4 = AlignedVector<vec4, 16>;
+    using AlignedVec3 = AlignedVector<vec3, 16>;
     using AlignedVec2 = AlignedVector<vec2, 16>;
-    using Face = std::array<int, 3>;
     using AlignedFaces = AlignedVector<Face, 16>;
 
     static_assert(std::is_same_v<AlignedVec4::value_type, vec4>);
@@ -137,16 +171,16 @@ namespace renderer {
     struct model {
         AlignedVec4 vertexPositions;
         //AlignedVec4 vertexNormals;
-        //AlignedVec2 vertexUVs;
+        AlignedVec2 vertexUVs;
         AlignedFaces faceVerticies;
         std::array<float, 16> transform;
-
         //std::array<uint32_t, 4096> albedo;
     };
 
     struct scene {
         std::vector<model> models;
-        std::array<float, 16> cameraTransform;
+        vec4 cameraPos;
+        float fov, near, far;
         
     };
 
