@@ -174,7 +174,7 @@ namespace renderer {
         AlignedVec2 vertexUVs;
         AlignedFaces faceVerticies;
         std::array<float, 16> transform;
-        //std::array<uint32_t, 4096> albedo;
+        std::vector<uint32_t> albedo;
     };
 
     struct scene {

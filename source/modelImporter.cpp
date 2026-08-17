@@ -9,7 +9,7 @@
 
 namespace renderer {
 
-    void parseOBJFile(char *const file, renderer::AlignedVec4& verticies, renderer::AlignedFaces& faces, renderer::AlignedVec2 uvs) {
+    void parseOBJFile(char *const file, renderer::AlignedVec4& verticies, renderer::AlignedFaces& faces, renderer::AlignedVec2& uvs) {
         std::ifstream ifs(file);
         std::string line;
 
@@ -38,7 +38,7 @@ namespace renderer {
                     assert(!part.empty());
                     f.Verts[i] = std::stoi(part) - 1;
 
-                    if (std::getline(stream, part, '/') && !part.empty()) {
+                    if (std::getline(tupStream, part, '/') && !part.empty()) {
                         f.UVs[i] = std::stoi(part) - 1;
                     }
                 }
@@ -50,10 +50,13 @@ namespace renderer {
     //consider changing to a template for array size
     void parsePNG(char *const file, std::vector<uint32_t>& output) {
         int x,y,n;
-        unsigned char *data = stbi_load("necoarctexture.png", &x, &y, &n, 4);
-        uint32_t *colours = reinterpret_cast<uint32_t *>(data);
-        output.resize(x*y);
-        output.assign(colours, colours + (x*y));
+        unsigned char *data = stbi_load(file, &x, &y, &n, 4);
+        //uint32_t *colours = reinterpret_cast<uint32_t *>(data);
+        //output.resize(x*y);
+        output.assign(reinterpret_cast<uint32_t *>(data), reinterpret_cast<uint32_t *>(data) + (x*y));
+        stbi_image_free(data);
+        data = nullptr;
+        // stbi_image_free(colours);
     }
 
 }

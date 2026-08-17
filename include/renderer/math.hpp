@@ -31,7 +31,7 @@ renderer::AlignedVec4 localToTransform(std::array<float, 16> const& transform, r
 
 renderer::AlignedVec4 getProjectedCoordinates(AlignedVec4 const& verticies, vec4 const& cameraPos, float const fov, float const near, float const far, float const aspectRatio);
 
-renderer::AlignedVec3 getRasterCoords(AlignedVec4 const& verticies, int height, int width);
+renderer::AlignedVec4 getRasterCoords(AlignedVec4 const& verticies, int height, int width);
 
 //renderer::AlignedVec3 cameraToRasterTransform();
 

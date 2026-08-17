@@ -500,7 +500,12 @@ renderer::AlignedVec4 divideW(renderer::AlignedVec4 const& cartesianVerticies) {
         resultC1 = vmovq_n_f32(v.val[1][3]);
         resultC2 = vmovq_n_f32(v.val[2][3]);
         resultC3 = vmovq_n_f32(v.val[3][3]);
-        
+
+        resultC0 = vsetq_lane_f32(1, resultC0, 3);
+        resultC1 = vsetq_lane_f32(1, resultC1, 3);
+        resultC2 = vsetq_lane_f32(1, resultC2, 3);
+        resultC3 = vsetq_lane_f32(1, resultC3, 3);        
+
         resultC0 = vdivq_f32(v.val[0], resultC0);
         resultC1 = vdivq_f32(v.val[1], resultC1);
         resultC2 = vdivq_f32(v.val[2], resultC2);
@@ -513,6 +518,7 @@ renderer::AlignedVec4 divideW(renderer::AlignedVec4 const& cartesianVerticies) {
     for(;i < count; ++i) {
         float32x4_t v = vld1q_f32(reinterpret_cast<float const*>(cartesianVerticies.data()) + (i*4));
         float32x4_t result = vmovq_n_f32(cartesianVerticies[i].w);
+        result = vsetq_lane_f32(1, result, 3);
         result = vdivq_f32(v, result);
         
         vst1q_f32(reinterpret_cast<float *>(homogenousVerticies.data()) + (i*4), result);
@@ -531,6 +537,7 @@ renderer::AlignedVec4 getProjectedCoordinates(AlignedVec4 const& verticies, vec4
     };
 
     cameraTransform = applyTranslation(cameraTransform, cameraOffset);
+    // cameraTransform = applyRotationX(cameraTransform, -(std::numbers::pi/3));
     AlignedVec4 cameraSpaceVerticies = localToTransform(cameraTransform, verticies);
 
     const float top = tan(((fov/2)*(std::numbers::pi /180)))*near;
@@ -551,9 +558,9 @@ renderer::AlignedVec4 getProjectedCoordinates(AlignedVec4 const& verticies, vec4
 
 };
 
-renderer::AlignedVec3 getRasterCoords(AlignedVec4 const& verticies, int height, int width) {
+renderer::AlignedVec4 getRasterCoords(AlignedVec4 const& verticies, int height, int width) {
     size_t count = verticies.size();
-    AlignedVec3 rasterVerts(count, {0, 0, 0});
+    AlignedVec4 rasterVerts(count, {0, 0, 0, 0});
    
 
     float32x4_t resultC0;
@@ -582,13 +589,13 @@ renderer::AlignedVec3 getRasterCoords(AlignedVec4 const& verticies, int height, 
         resultC1 = vdivq_f32(resultC1, tempC1);
         resultC1 = vmulq_f32(resultC1, tempC3);
 
-        float32x4x3_t v_r = {resultC0, resultC1, v.val[2]};
-        vst3q_f32(reinterpret_cast<float *>(rasterVerts.data()) + (i*3), v_r);
+        float32x4x4_t v_r = {resultC0, resultC1, v.val[2], v.val[3]};
+        vst4q_f32(reinterpret_cast<float *>(rasterVerts.data()) + (i*4), v_r);
     }
 
     //for this one since we'd essentially be doing every element individually there isn't really a reason to do this cleanup with simd
     for(;i<count;++i){
-        rasterVerts[i] = {(verticies[i].x + 1)/2 * width, (1 - verticies[i].y)/2 * height, verticies[i].z};
+        rasterVerts[i] = {(verticies[i].x + 1)/2 * width, (1 - verticies[i].y)/2 * height, verticies[i].z, verticies[i].w};
     }
 
     return rasterVerts;
