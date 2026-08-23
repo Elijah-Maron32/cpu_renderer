@@ -164,6 +164,7 @@ namespace renderer {
         if (area < 0) {
             return;
         }
+        float oneOnArea = 16.0/static_cast<float>(area);
         edge e0, e1, e2;
 
         int32x4_t w0 = e0.init(p1, p0, minV);
@@ -188,7 +189,7 @@ namespace renderer {
                 int32_t mask_min = vmaxvq_s32(mask);
                 //std::cout << mask_min << "\n";
                 if (mask_min >= 0) {
-                    drawPixel(x, y, w0_temp, w1_temp, w2_temp, mask, face, v0, v1, v2, area, m);
+                    drawPixel(x, y, w0_temp, w1_temp, w2_temp, mask, face, v0, v1, v2, oneOnArea, m);
                 }
                 w0_temp = vaddq_s32(w0_temp, e0.oneStepX);
                 w1_temp = vaddq_s32(w1_temp, e1.oneStepX);
@@ -201,15 +202,14 @@ namespace renderer {
     };
 
 
-    void rasterizer::drawPixel(int32_t x, int32_t y, int32x4_t const &w0, int32x4_t const &w1, int32x4_t const &w2, int32x4_t const &mask, Face const &f, vec4 const &v0, vec4 const &v1, vec4 const &v2, int area, model const &m){
-        //potentially move to being precomputed like area
-        float oneOnArea = 16.0/static_cast<float>(area);
-        float v0z = 1/v0.z * oneOnArea;
-        float v1z = 1/v1.z * oneOnArea;
-        float v2z = 1/v2.z * oneOnArea;
+    void rasterizer::drawPixel(int32_t x, int32_t y, int32x4_t const &w0, int32x4_t const &w1, int32x4_t const &w2, int32x4_t const &mask, Face const &f, vec4 const &v0, vec4 const &v1, vec4 const &v2, float const &oneOnArea, model const &m){
+        //Probably convert all of this to a DDA
         float v0w = 1/v0.w * oneOnArea;
         float v1w = 1/v1.w * oneOnArea;
         float v2w = 1/v2.w * oneOnArea;
+        float v0z = v0.z * v0w;
+        float v1z = v1.z * v1w;
+        float v2z = v2.z * v2w;
         float v0u = (m.vertexUVs[f.UVs[0]].x) * v0w;
         float v1u = (m.vertexUVs[f.UVs[1]].x) * v1w;
         float v2u = (m.vertexUVs[f.UVs[2]].x) * v2w;
@@ -222,10 +222,10 @@ namespace renderer {
 
         //change these to more efficient sign checks later maybe
         if (vgetq_lane_s32(mask, 0) >= 0) {
-            float z0 = static_cast<float>(vgetq_lane_s32(w1, 0))/16 * v0z + static_cast<float>(vgetq_lane_s32(w2, 0))/16 * v1z + static_cast<float>(vgetq_lane_s32(w0, 0))/16 * v2z;
-            z0 = 1/z0;
             float W0 = static_cast<float>(vgetq_lane_s32(w1, 0))/16 * v0w + static_cast<float>(vgetq_lane_s32(w2, 0))/16 * v1w + static_cast<float>(vgetq_lane_s32(w0, 0))/16 * v2w;
             W0 = 1/W0;
+            float z0 = static_cast<float>(vgetq_lane_s32(w1, 0))/16 * v0z + static_cast<float>(vgetq_lane_s32(w2, 0))/16 * v1z + static_cast<float>(vgetq_lane_s32(w0, 0))/16 * v2z;
+            z0 *= W0;
             float u0 = static_cast<float>(vgetq_lane_s32(w1, 0))/16 * v0u + static_cast<float>(vgetq_lane_s32(w2, 0))/16 * v1u + static_cast<float>(vgetq_lane_s32(w0, 0))/16 * v2u;
             u0 *= W0;
             float V0 = static_cast<float>(vgetq_lane_s32(w1, 0))/16 * v0v + static_cast<float>(vgetq_lane_s32(w2, 0))/16 * v1v + static_cast<float>(vgetq_lane_s32(w0, 0))/16 * v2v;
@@ -243,10 +243,10 @@ namespace renderer {
         }
 
         if (normalX + 1 <= this->width && vgetq_lane_s32(mask, 1) >= 0) {
-            float z1 = static_cast<float>(vgetq_lane_s32(w1, 1))/16 * v0z + static_cast<float>(vgetq_lane_s32(w2, 1))/16 * v1z + static_cast<float>(vgetq_lane_s32(w0, 1))/16 * v2z;
-            z1 = 1/z1;
             float W1 = static_cast<float>(vgetq_lane_s32(w1, 1))/16 * v0w + static_cast<float>(vgetq_lane_s32(w2, 1))/16 * v1w + static_cast<float>(vgetq_lane_s32(w0, 1))/16 * v2w;
             W1 = 1/W1;
+            float z1 = static_cast<float>(vgetq_lane_s32(w1, 1))/16 * v0z + static_cast<float>(vgetq_lane_s32(w2, 1))/16 * v1z + static_cast<float>(vgetq_lane_s32(w0, 1))/16 * v2z;
+            z1 *= W1;
             float u1 = static_cast<float>(vgetq_lane_s32(w1, 1))/16 * v0u + static_cast<float>(vgetq_lane_s32(w2, 1))/16 * v1u + static_cast<float>(vgetq_lane_s32(w0, 1))/16 * v2u;
             u1 *= W1;
             float V1 = static_cast<float>(vgetq_lane_s32(w1, 1))/16 * v0v + static_cast<float>(vgetq_lane_s32(w2, 1))/16 * v1v + static_cast<float>(vgetq_lane_s32(w0, 1))/16 * v2v;
@@ -264,10 +264,10 @@ namespace renderer {
         }
 
         if (normalY + 1 <= this->height && vgetq_lane_s32(mask, 2) >= 0) {
-            float z2 = static_cast<float>(vgetq_lane_s32(w1, 2))/16 * v0z + static_cast<float>(vgetq_lane_s32(w2, 2))/16 * v1z + static_cast<float>(vgetq_lane_s32(w0, 2))/16 * v2z;
-            z2 = 1/z2;
             float W2 = static_cast<float>(vgetq_lane_s32(w1, 2))/16 * v0w + static_cast<float>(vgetq_lane_s32(w2, 2))/16 * v1w + static_cast<float>(vgetq_lane_s32(w0, 2))/16 * v2w;
             W2 = 1/W2;
+            float z2 = static_cast<float>(vgetq_lane_s32(w1, 2))/16 * v0z + static_cast<float>(vgetq_lane_s32(w2, 2))/16 * v1z + static_cast<float>(vgetq_lane_s32(w0, 2))/16 * v2z;
+            z2 *= W2;
             float u2 = static_cast<float>(vgetq_lane_s32(w1, 2))/16 * v0u + static_cast<float>(vgetq_lane_s32(w2, 2))/16 * v1u + static_cast<float>(vgetq_lane_s32(w0, 2))/16 * v2u;
             u2 *= W2;
             float V2 = static_cast<float>(vgetq_lane_s32(w1, 2))/16 * v0v + static_cast<float>(vgetq_lane_s32(w2, 2))/16 * v1v + static_cast<float>(vgetq_lane_s32(w0, 2))/16 * v2v;
@@ -285,10 +285,10 @@ namespace renderer {
         }
 
         if (normalX + 1 <= this->width && normalY + 1 <= this->height && vgetq_lane_s32(mask, 3) >= 0) {
-            float z3 = static_cast<float>(vgetq_lane_s32(w1, 3))/16 * v0z + static_cast<float>(vgetq_lane_s32(w2, 3))/16 * v1z + static_cast<float>(vgetq_lane_s32(w0, 3))/16 * v2z;
-            z3 = 1/z3;
             float W3 = static_cast<float>(vgetq_lane_s32(w1, 3))/16 * v0w + static_cast<float>(vgetq_lane_s32(w2, 3))/16 * v1w + static_cast<float>(vgetq_lane_s32(w0, 3))/16 * v2w;
             W3 = 1/W3;
+            float z3 = static_cast<float>(vgetq_lane_s32(w1, 3))/16 * v0z + static_cast<float>(vgetq_lane_s32(w2, 3))/16 * v1z + static_cast<float>(vgetq_lane_s32(w0, 3))/16 * v2z;
+            z3 *= W3;
             float u3 = static_cast<float>(vgetq_lane_s32(w1, 3))/16 * v0u + static_cast<float>(vgetq_lane_s32(w2, 3))/16 * v1u + static_cast<float>(vgetq_lane_s32(w0, 3))/16 * v2u;
             u3 *= W3;
             float V3 = static_cast<float>(vgetq_lane_s32(w1, 3))/16 * v0v + static_cast<float>(vgetq_lane_s32(w2, 3))/16 * v1v + static_cast<float>(vgetq_lane_s32(w0, 3))/16 * v2v;
