@@ -15,7 +15,7 @@ using namespace renderer;
 int main(int argc, char* args[]){
 
     renderer::vec4 const cameraPos = {0,1,1,1};
-    // renderer::vec4 const cameraDir = {0,0,-1,0};
+    //renderer::vec4 const cameraDir = {0,0,-1,0};
     float const fov = 90, near = 1, far = 5;
     float aspectRatio = 16.0/9.0;
 
@@ -168,7 +168,7 @@ int main(int argc, char* args[]){
         prev_frame = now;
         
 
-        // std::cout << dt << std::endl;
+        std::cout << dt << std::endl;
         
         
         stuff.models[0].transform = applyTranslation(stuff.models[0].transform, {0, static_cast<float>(std::sin(rt*(std::numbers::pi))) * 2 * dt, 0, 1});

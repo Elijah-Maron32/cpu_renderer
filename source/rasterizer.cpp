@@ -71,7 +71,22 @@ namespace renderer {
         int32x4_t oneStepX;
         int32x4_t oneStepY;
 
+        
+
         int32x4_t init(std::array<int32_t,2> v0, std::array<int32_t,2> v1, std::array<int32_t,2> origin);
+    };
+
+    struct DDA {
+        float dX;
+        float dY;
+        float c;
+
+        float32x4_t oneStepX;
+        float32x4_t oneStepY;
+
+        float calculateBaseValue(int x, int y) {
+            return dX * static_cast<float>(x);
+        }
     };
 
     int32x4_t edge::init(std::array<int32_t,2> v0,std::array<int32_t,2> v1, std::array<int32_t,2> origin) {
@@ -111,6 +126,36 @@ namespace renderer {
     int computeArea(std::array<int,2> const &v0, std::array<int,2> const &v1, std::array<int,2> const &v2) {
         return (((((v1[0] - v0[0]) * (v2[1] - v0[1])) + 8) >> 4) - ((((v1[1] - v0[1]) * (v2[0] - v0[0])) + 8 )>> 4));
     }
+
+    struct triConstants {
+        float v0w;
+        float v1w;
+        float v2w;
+        float v0z;
+        float v1z;
+        float v2z;
+        float v0u;
+        float v1u;
+        float v2u;
+        float v0v;
+        float v1v;
+        float v2v;
+
+        void calculateConstants(vec4 const &v0, vec4 const &v1, vec4 const &v2, model const &m, Face const &f, float oneOnArea) {
+            v0w = 1/v0.w * oneOnArea;
+            v1w = 1/v1.w * oneOnArea;
+            v2w = 1/v2.w * oneOnArea;
+            v0z = v0.z * v0w;
+            v1z = v1.z * v1w;
+            v2z = v2.z * v2w;
+            v0u = (m.vertexUVs[f.UVs[0]].x) * v0w;
+            v1u = (m.vertexUVs[f.UVs[1]].x) * v1w;
+            v2u = (m.vertexUVs[f.UVs[2]].x) * v2w;
+            v0v = (1 - (m.vertexUVs[f.UVs[0]].y)) * v0w;
+            v1v = (1 - (m.vertexUVs[f.UVs[1]].y)) * v1w;
+            v2v = (1 - (m.vertexUVs[f.UVs[2]].y)) * v2w;
+        }
+    };
 
     //is there a way to do a simd bounding box with only 3 verticies?
     //if we just load our verts in AoS then doing two max and min calls could work?
@@ -167,11 +212,14 @@ namespace renderer {
         float oneOnArea = 16.0/static_cast<float>(area);
         edge e0, e1, e2;
 
+        triConstants c;
+        c.calculateConstants(v0, v1, v2, m, face, oneOnArea);
+
         int32x4_t w0 = e0.init(p1, p0, minV);
         int32x4_t w1 = e1.init(p2, p1, minV);
         int32x4_t w2 = e2.init(p0, p2, minV);
 
-
+        
 
         for (int32_t y = minV[1]; y <= (maxV[1]); y += (edge::stepYsize)) {
             int32x4_t w0_temp = w0;
@@ -182,14 +230,14 @@ namespace renderer {
                 int32x4_t mask = vorrq_s32(w0_temp, w1_temp);
                 mask = vorrq_s32(mask, w2_temp);
                 
-                //mask = vcgeq_s32(mask, );
+                uint32x4_t bitMask = vcgeq_s32(mask, vmovq_n_s32(0));
                 //need to now check if any of the masks are positive?
                 //whats the best way?
                 //if I can reduce the whole vector to a single scalar that could work?
                 int32_t mask_min = vmaxvq_s32(mask);
                 //std::cout << mask_min << "\n";
                 if (mask_min >= 0) {
-                    drawPixel(x, y, w0_temp, w1_temp, w2_temp, mask, face, v0, v1, v2, oneOnArea, m);
+                    drawPixel(x, y, w0_temp, w1_temp, w2_temp, bitMask, m, c);
                 }
                 w0_temp = vaddq_s32(w0_temp, e0.oneStepX);
                 w1_temp = vaddq_s32(w1_temp, e1.oneStepX);
@@ -202,115 +250,133 @@ namespace renderer {
     };
 
 
-    void rasterizer::drawPixel(int32_t x, int32_t y, int32x4_t const &w0, int32x4_t const &w1, int32x4_t const &w2, int32x4_t const &mask, Face const &f, vec4 const &v0, vec4 const &v1, vec4 const &v2, float const &oneOnArea, model const &m){
-        //Probably convert all of this to a DDA
-        float v0w = 1/v0.w * oneOnArea;
-        float v1w = 1/v1.w * oneOnArea;
-        float v2w = 1/v2.w * oneOnArea;
-        float v0z = v0.z * v0w;
-        float v1z = v1.z * v1w;
-        float v2z = v2.z * v2w;
-        float v0u = (m.vertexUVs[f.UVs[0]].x) * v0w;
-        float v1u = (m.vertexUVs[f.UVs[1]].x) * v1w;
-        float v2u = (m.vertexUVs[f.UVs[2]].x) * v2w;
-        float v0v = (1 - (m.vertexUVs[f.UVs[0]].y)) * v0w;
-        float v1v = (1 - (m.vertexUVs[f.UVs[1]].y)) * v1w;
-        float v2v = (1 - (m.vertexUVs[f.UVs[2]].y)) * v2w;
+    void rasterizer::drawPixel(int32_t x, int32_t y, int32x4_t const &w0, int32x4_t const &w1, int32x4_t const &w2, uint32x4_t const &mask, model const &m, triConstants const &c){
+
 
         int normalX = (x) >> 4;
         int normalY = (y) >> 4;
 
-        //change these to more efficient sign checks later maybe
-        if (vgetq_lane_s32(mask, 0) >= 0) {
-            float W0 = static_cast<float>(vgetq_lane_s32(w1, 0))/16 * v0w + static_cast<float>(vgetq_lane_s32(w2, 0))/16 * v1w + static_cast<float>(vgetq_lane_s32(w0, 0))/16 * v2w;
-            W0 = 1/W0;
-            float z0 = static_cast<float>(vgetq_lane_s32(w1, 0))/16 * v0z + static_cast<float>(vgetq_lane_s32(w2, 0))/16 * v1z + static_cast<float>(vgetq_lane_s32(w0, 0))/16 * v2z;
-            z0 *= W0;
-            float u0 = static_cast<float>(vgetq_lane_s32(w1, 0))/16 * v0u + static_cast<float>(vgetq_lane_s32(w2, 0))/16 * v1u + static_cast<float>(vgetq_lane_s32(w0, 0))/16 * v2u;
-            u0 *= W0;
-            float V0 = static_cast<float>(vgetq_lane_s32(w1, 0))/16 * v0v + static_cast<float>(vgetq_lane_s32(w2, 0))/16 * v1v + static_cast<float>(vgetq_lane_s32(w0, 0))/16 * v2v;
-            V0 *= W0;
-
-            int tex0u = static_cast<int>((u0) * 1024);
-            int tex0v = static_cast<int>((V0) * 1024) * 1024;
-            int colour0 = static_cast<int>((1 - z0) * 255);
-            if (z0 >= 0 && z0 <= 1 && this->depthBuffer[normalX + (normalY*this->width)] > z0) {
-                this->colorBuffer[normalX + (normalY*this->width)] = m.albedo[tex0u + tex0v];
-                // this->colorBuffer[normalX + (normalY*this->width)] = 0xff000000 | colour0 | (colour0 << 8) | (colour0 << 16);  
-                // this->colorBuffer[normalX + ((normalY)*this->width)] =  m.albedo[((normalX)/this->height) * 1024 + (((normalY)/this->width) * 1024 * 1024)];
-                this->depthBuffer[normalX + (normalY*this->width)] = z0;
-            }
-        }
-
-        if (normalX + 1 <= this->width && vgetq_lane_s32(mask, 1) >= 0) {
-            float W1 = static_cast<float>(vgetq_lane_s32(w1, 1))/16 * v0w + static_cast<float>(vgetq_lane_s32(w2, 1))/16 * v1w + static_cast<float>(vgetq_lane_s32(w0, 1))/16 * v2w;
-            W1 = 1/W1;
-            float z1 = static_cast<float>(vgetq_lane_s32(w1, 1))/16 * v0z + static_cast<float>(vgetq_lane_s32(w2, 1))/16 * v1z + static_cast<float>(vgetq_lane_s32(w0, 1))/16 * v2z;
-            z1 *= W1;
-            float u1 = static_cast<float>(vgetq_lane_s32(w1, 1))/16 * v0u + static_cast<float>(vgetq_lane_s32(w2, 1))/16 * v1u + static_cast<float>(vgetq_lane_s32(w0, 1))/16 * v2u;
-            u1 *= W1;
-            float V1 = static_cast<float>(vgetq_lane_s32(w1, 1))/16 * v0v + static_cast<float>(vgetq_lane_s32(w2, 1))/16 * v1v + static_cast<float>(vgetq_lane_s32(w0, 1))/16 * v2v;
-            V1 *= W1;
-
-            int tex1u = static_cast<int>(u1 * 1024);
-            int tex1v = static_cast<int>((V1) * 1024) * 1024;
-            int colour1 = static_cast<int>((1 - z1) * 255);
-            if (z1 >= 0 && z1 <= 1 && this->depthBuffer[normalX + 1 + (normalY*this->width)] > z1){
-                this->colorBuffer[normalX + 1 + (normalY*this->width)] = m.albedo[tex1u + tex1v];
-                // this->colorBuffer[normalX + 1 + (normalY*this->width)] = 0xff000000 | colour1 | (colour1 << 8) | (colour1 << 16);
-                // this->colorBuffer[normalX + 1 + ((normalY)*this->width)] =  m.albedo[((normalX + 1)/this->height) * 1024 + (((normalY)/this->width) * 1024 * 1024)];
-                this->depthBuffer[normalX + 1 + (normalY*this->width)] = z1;
-            }
-        }
-
-        if (normalY + 1 <= this->height && vgetq_lane_s32(mask, 2) >= 0) {
-            float W2 = static_cast<float>(vgetq_lane_s32(w1, 2))/16 * v0w + static_cast<float>(vgetq_lane_s32(w2, 2))/16 * v1w + static_cast<float>(vgetq_lane_s32(w0, 2))/16 * v2w;
-            W2 = 1/W2;
-            float z2 = static_cast<float>(vgetq_lane_s32(w1, 2))/16 * v0z + static_cast<float>(vgetq_lane_s32(w2, 2))/16 * v1z + static_cast<float>(vgetq_lane_s32(w0, 2))/16 * v2z;
-            z2 *= W2;
-            float u2 = static_cast<float>(vgetq_lane_s32(w1, 2))/16 * v0u + static_cast<float>(vgetq_lane_s32(w2, 2))/16 * v1u + static_cast<float>(vgetq_lane_s32(w0, 2))/16 * v2u;
-            u2 *= W2;
-            float V2 = static_cast<float>(vgetq_lane_s32(w1, 2))/16 * v0v + static_cast<float>(vgetq_lane_s32(w2, 2))/16 * v1v + static_cast<float>(vgetq_lane_s32(w0, 2))/16 * v2v;
-            V2 *= W2;
-
-            int tex2u = static_cast<int>(u2 * 1024);
-            int tex2v = static_cast<int>((V2) * 1024) * 1024;
-            int colour2 = static_cast<int>((1 - z2) * 255);
-            if (z2 >= 0 && z2 <= 1 && this->depthBuffer[normalX + ((normalY + 1)*this->width)] > z2) {
-                this->colorBuffer[normalX + ((normalY + 1)*this->width)] = m.albedo[tex2u + tex2v];
-                // this->colorBuffer[normalX + ((normalY + 1)*this->width)] = 0xff000000 | colour2 | (colour2 << 8) | (colour2 << 16);
-                // this->colorBuffer[normalX + ((normalY + 1)*this->width)] =  m.albedo[((normalX)/this->height) * 1024 + (((normalY + 1)/this->width) * 1024 * 1024)];
-                this->depthBuffer[normalX + ((normalY + 1)*this->width)] = z2;
-            }        
-        }
-
-        if (normalX + 1 <= this->width && normalY + 1 <= this->height && vgetq_lane_s32(mask, 3) >= 0) {
-            float W3 = static_cast<float>(vgetq_lane_s32(w1, 3))/16 * v0w + static_cast<float>(vgetq_lane_s32(w2, 3))/16 * v1w + static_cast<float>(vgetq_lane_s32(w0, 3))/16 * v2w;
-            W3 = 1/W3;
-            float z3 = static_cast<float>(vgetq_lane_s32(w1, 3))/16 * v0z + static_cast<float>(vgetq_lane_s32(w2, 3))/16 * v1z + static_cast<float>(vgetq_lane_s32(w0, 3))/16 * v2z;
-            z3 *= W3;
-            float u3 = static_cast<float>(vgetq_lane_s32(w1, 3))/16 * v0u + static_cast<float>(vgetq_lane_s32(w2, 3))/16 * v1u + static_cast<float>(vgetq_lane_s32(w0, 3))/16 * v2u;
-            u3 *= W3;
-            float V3 = static_cast<float>(vgetq_lane_s32(w1, 3))/16 * v0v + static_cast<float>(vgetq_lane_s32(w2, 3))/16 * v1v + static_cast<float>(vgetq_lane_s32(w0, 3))/16 * v2v;
-            V3 *= W3;
-
-            int tex3u = static_cast<int>(u3 * 1024);
-            int tex3v = static_cast<int>((V3) * 1024) * 1024;
-            int colour3 = static_cast<int>((1 - z3) * 255);
-            if (z3 >= 0 && z3 <= 1 && this->depthBuffer[normalX + 1 + ((normalY + 1)*this->width)] > z3) {
-                this->colorBuffer[normalX + 1 + ((normalY + 1)*this->width)] =  m.albedo[tex3u + tex3v];
-                // this->colorBuffer[normalX + 1 + ((normalY + 1)*this->width)] =  0xff000000 | colour3 | (colour3 << 8) | (colour3 << 16);
-                // this->colorBuffer[normalX + 1 + ((normalY + 1)*this->width)] =  m.albedo[((normalX + 1)/this->height) * 1024 + (((normalY + 1)/this->width) * 1024 * 1024)];
-                this->depthBuffer[normalX + 1 + ((normalY + 1)*this->width)] = z3;
-            }   
-        }
-        // this->colorBuffer[static_cast<int>(v0.x) + (static_cast<int>(v0.y) * this->width)] = m.albedo[(static_cast<int>(m.vertexUVs[f.UVs[0]].x) * 1024) + ((static_cast<int>(m.vertexUVs[f.UVs[0]].y) * 1024) * 1024)];
+        int32x4_t xTest = {0,1,0,1};
+        xTest = vaddq_s32(xTest, vmovq_n_s32(normalX));
+        uint32x4_t xMask = vcltq_s32(xTest, vmovq_n_s32(width));
         
-        // this->colorBuffer[static_cast<int>(v1.x) + (static_cast<int>(v1.y) * this->width)] = m.albedo[(static_cast<int>(m.vertexUVs[f.UVs[1]].x) * 1024) + ((static_cast<int>(m.vertexUVs[f.UVs[1]].y) * 1024) * 1024)];
+        int32x4_t yTest = {0,0,1,1};
+        yTest = vaddq_s32(yTest, vmovq_n_s32(normalY));
+        uint32x4_t yMask = vcltq_s32(yTest, vmovq_n_s32(height));
         
-        // this->colorBuffer[static_cast<int>(v2.x) + (static_cast<int>(v2.y) * this->width)] = m.albedo[(static_cast<int>(m.vertexUVs[f.UVs[2]].x) * 1024) + ((static_cast<int>(m.vertexUVs[f.UVs[2]].y) * 1024) * 1024)];
+        uint32x4_t bitMask = vandq_s32(xMask, yMask);
+        bitMask = vandq_s32(bitMask, mask);
+        
+        //Load our edge function weights and convert them back from fixed point (divide by 16)
+        float32x4_t sixteen = vmovq_n_f32(16.0);
+        float32x4_t L0 = vcvtq_f32_s32(w0);
+        L0 = vdivq_f32(L0, sixteen);
+        float32x4_t L1 = vcvtq_f32_s32(w1);
+        L1 = vdivq_f32(L1, sixteen);
+        float32x4_t L2 = vcvtq_f32_s32(w2);
+        L2 = vdivq_f32(L2, sixteen);
 
-        //for now just write the depth buffer to screen
+        //load vertex 1/W * 1/area
+        float32x4_t v0W = vmovq_n_f32(c.v0w);
+        float32x4_t v1W = vmovq_n_f32(c.v1w);
+        float32x4_t v2W = vmovq_n_f32(c.v2w);
+
+        //load vertex z/w
+        float32x4_t v0Z = vmovq_n_f32(c.v0z);
+        float32x4_t v1Z = vmovq_n_f32(c.v1z);
+        float32x4_t v2Z = vmovq_n_f32(c.v2z);
+
+        //load vertex u/w
+        float32x4_t v0U = vmovq_n_f32(c.v0u);
+        float32x4_t v1U = vmovq_n_f32(c.v1u);
+        float32x4_t v2U = vmovq_n_f32(c.v2u);
+
+        //load vertex v/w
+        float32x4_t v0V = vmovq_n_f32(c.v0v);
+        float32x4_t v1V = vmovq_n_f32(c.v1v);
+        float32x4_t v2V = vmovq_n_f32(c.v2v);
+
+        //calculate pixel 1/w
+        //1/w = l0 * v2w + l1 * v0w + l2 * v1w
+        float32x4_t pWrec = vmovq_n_f32(0);
+        pWrec = vfmaq_f32(pWrec, L0, v2W);
+        pWrec = vfmaq_f32(pWrec, L1, v0W);
+        pWrec = vfmaq_f32(pWrec, L2, v1W);
+
+        //calculate pixel w
+        //using newton-raphson approximation to avoid division
+        //Built in reciprocal estimation ~8 bits precision
+        float32x4_t pW = vrecpeq_f32(pWrec);
+        //calculating 1/d ~ x(n+1) = x(n)(2-(x(n)*d))
+        //this improves our approximation to ~16 bits precision
+        float32x4_t pWstep = vrecpsq_f32(pWrec, pW);
+        pW = vmulq_f32(pW, pWstep);
+        //doing the step again gives us ~32 bits precisions, we're only working with 32 bits, so no need to do more
+        pWstep = vrecpsq_f32(pWrec, pW);
+        pW = vmulq_f32(pW, pWstep);
+        
+        //calculate pixel z/w
+        float32x4_t pZ = vmovq_n_f32(0);
+        pZ = vfmaq_f32(pZ, L0,v2Z);
+        pZ = vfmaq_f32(pZ, L1,v0Z);
+        pZ = vfmaq_f32(pZ, L2,v1Z);
+        //Factor out w
+        pZ = vmulq_f32(pZ, pW);
+
+        //calculate pixel u/w
+        float32x4_t pU = vmovq_n_f32(0);
+        pU = vfmaq_f32(pU, L0,v2U);
+        pU = vfmaq_f32(pU, L1,v0U);
+        pU = vfmaq_f32(pU, L2,v1U);
+        //Factor out w
+        pU = vmulq_f32(pU, pW);
+        //get actual on texture co-ordinate value
+        float32x4_t texWidth = vmovq_n_f32(1024);
+        pU = vmulq_f32(pU, texWidth);
+        int32x4_t texU = vcvtq_s32_f32(pU);
+
+        //calculate pixel v/w
+        float32x4_t pV = vmovq_n_f32(0);
+        pV = vfmaq_f32(pV, L0,v2V);
+        pV = vfmaq_f32(pV, L1,v0V);
+        pV = vfmaq_f32(pV, L2,v1V);
+        //Factor out w
+        pV = vmulq_f32(pV, pW);
+        //get actual on texture co-ordinate value
+        float32x4_t texHeight = vmovq_n_f32(1024);
+        pV = vmulq_f32(pV, texHeight);
+        int32x4_t texV = vcvtq_s32_f32(pV);
+
+        float32x2_t depth1 = vld1_f32(depthBuffer.data() + (normalX + (width * normalY)));
+        float32x2_t z1 = vget_low_f32(pZ);
+        uint32x2_t depthTest1 = vcle_f32(z1, depth1);
+        depthTest1 = vand_u32(vget_low_u32(bitMask), depthTest1);
+        depth1 = vbsl_f32(depthTest1, z1, depth1);
+        vst1_f32(depthBuffer.data() + (normalX + (width * normalY)), depth1);
+
+        float32x2_t depth2 = vld1_f32(depthBuffer.data() + (normalX + (width * (normalY + 1))));
+        float32x2_t z2 = vget_high_f32(pZ);
+        uint32x2_t depthTest2 = vcle_f32(z2, depth2);
+        depthTest2 = vand_u32(depthTest2, vget_high_u32(bitMask));
+        depth2 = vbsl_f32(depthTest2, z2, depth2);
+        vst1_f32(depthBuffer.data() + (normalX + (width * (normalY + 1))), depth2);
+
+        if (vget_lane_u32(depthTest1, 0) != 0) {
+            colorBuffer[normalX + (normalY*width)] = m.albedo[vgetq_lane_s32(texU, 0) + (vgetq_lane_s32(texV, 0) * 1024)];
+
+        }
+
+        if (normalX + 1 <= this->width && vget_lane_u32(depthTest1, 1) != 0) {
+            colorBuffer[(normalX + 1) + (normalY*width)] = m.albedo[vgetq_lane_s32(texU, 1) + (vgetq_lane_s32(texV, 1) * 1024)];
+        }
+
+        if (normalY + 1 <= this->height && vget_lane_u32(depthTest2, 0) != 0) {
+            colorBuffer[normalX + ((normalY + 1)*width)] = m.albedo[vgetq_lane_s32(texU, 2) + (vgetq_lane_s32(texV, 2) * 1024)];
+        }
+
+        if (normalX + 1 <= this->width && normalY + 1 <= this->height && vget_lane_u32(depthTest2, 1) != 0) {
+            colorBuffer[(normalX + 1) + ((normalY + 1)*width)] = m.albedo[vgetq_lane_s32(texU, 3) + (vgetq_lane_s32(texV, 3) * 1024)];
+        }
     }
 
 }
