@@ -15,21 +15,16 @@ using namespace renderer;
 int main(int argc, char* args[]){
 
     renderer::vec4 const cameraPos = {0,1,1,1};
-    //renderer::vec4 const cameraDir = {0,0,-1,0};
     float const fov = 90, near = 1, far = 5;
-    float aspectRatio = 16.0/9.0;
 
     renderer::model m;
-
     renderer::model m1;
 
     parsePNG("necoarctexture.png", m.albedo);
     parsePNG("cubeTexture.png", m1.albedo);
 
     renderer::parseOBJFile("necoarc.obj", m.vertexPositions, m.faceVerticies, m.vertexUVs);
-
     renderer::parseOBJFile("cube.obj", m1.vertexPositions, m1.faceVerticies, m1.vertexUVs);
-    //std::cout << m.vertexPositions.size() << "," << m.faceVerticies.size() << "\n";
 
     m.transform = {
         1, 0, 0, 0,
@@ -38,14 +33,6 @@ int main(int argc, char* args[]){
         0, 0, 0, 1
     };
 
-    // m1.transform = {
-    //     1, 0, 0, 0,
-    //     0, 1, 0, 0,
-    //     0, 0, 1, 0,
-    //     0, 0, 0, 1
-    // };
-
-
     m1.transform = {
         0.5, 0, 0, 0,
         0, 2, 0, 0,
@@ -53,19 +40,13 @@ int main(int argc, char* args[]){
         0, 0, 0, 1
     };
 
-
-    renderer::vec4 translation = {2, 0, -2.5, 1};
+    renderer::vec4 translation = {0, 0, -2.5, 1};
     renderer::vec4 translation1 = {0, 1, -2.5, 1};
 
 
 
-    // m.transform = renderer::applyScaling(m.transform, 1);
-    //m.transform = renderer::applyRotationX(m.transform, std::numbers::pi/-2.0);
-    // m.transform = renderer::applyRotationY(m.transform, std::numbers::pi/4);
     m.transform = applyTranslation(m.transform, translation);
     
-    //m1.transform = renderer::applyScaling(m1.transform, 0.5);
-    //m1.transform = renderer::applyRotationX(m1.transform, std::numbers::pi/4);
     m1.transform = renderer::applyRotationY(m1.transform, std::numbers::pi/4);
     m1.transform = applyTranslation(m1.transform, translation1);
 
@@ -74,48 +55,24 @@ int main(int argc, char* args[]){
 
     std::cout << "output\n";
     
-    // renderer::AlignedVec4 worldVerts = renderer::localToTransform(m.transform, m.vertexPositions);
-
-    // renderer::AlignedVec4 projectedVerts = renderer::getProjectedCoordinates(
-    //     worldVerts, cameraPos, fov, near, far, aspectRatio);
-
-    // renderer::AlignedVec3 rasterVerts = getRasterCoords(projectedVerts, 1920, 1080);
-
-    // for (renderer::vec4 element : projectedVerts)
-    // std::cout << element['x'] << "," << element['g']  << "," << element['B'] << "," << element['W'] << " ";
-
-    // for (renderer::vec3 element : rasterVerts)
-    // std::cout << element.x << "," << element.y << "," << element.z << "\n";
-    
     renderer::scene stuff;
     renderer::rasterizer raster;
     stuff.cameraPos = cameraPos;
     stuff.fov = fov;
     stuff.far = far;
     stuff.near = near;
-    stuff.models = {m, m1};
+    stuff.models = {m};
     
     int width = 1280;
     int height = 720;
     
-    std::vector<uint32_t> points = raster.rasterize(stuff, height, width);
-    //for (uint32_t pixel: points)
-    // if(pixel != 0xFFFFFFFF)
-    // std::cout <<  pixel << "\n";
-
-    //std::cout << "\n";
-
-    // for (renderer::Face element : m.faceVerticies)
-    // std::cout << element[0] << "," << element[1]  << "," << element[2] << " ";
-
-    //std::cout << "\n";
 
     
-    SDL_Window* window = SDL_CreateWindow("Terraria",
+    SDL_Window* window = SDL_CreateWindow("ARM 3D Renderer",
         SDL_WINDOWPOS_UNDEFINED,
         SDL_WINDOWPOS_UNDEFINED,
         width, height,
-        SDL_WINDOW_RESIZABLE | SDL_WINDOW_SHOWN);
+        SDL_WINDOW_SHOWN);
 
     SDL_Surface * draw_surface = nullptr;
 
@@ -132,25 +89,13 @@ int main(int argc, char* args[]){
     {
         for (SDL_Event event; SDL_PollEvent(&event);) switch (event.type)
         {
-        case SDL_WINDOWEVENT:
-            switch (event.window.event)
-            {
-            case SDL_WINDOWEVENT_RESIZED:
-                if (draw_surface)
-					SDL_FreeSurface(draw_surface);
-				draw_surface = nullptr;
-                width = event.window.data1;
-                height = event.window.data2;
+            case SDL_QUIT:
+                running = false;
                 break;
-            }
-            break;
-        case SDL_QUIT:
-            running = false;
-            break;
-        case SDL_MOUSEMOTION:
-            mouse_x = event.motion.x;
-            mouse_y = event.motion.y;
-            break;
+            case SDL_MOUSEMOTION:
+                mouse_x = event.motion.x;
+                mouse_y = event.motion.y;
+                break;   
         }
 
         if (!running)
@@ -172,13 +117,10 @@ int main(int argc, char* args[]){
         
         
         stuff.models[0].transform = applyTranslation(stuff.models[0].transform, {0, static_cast<float>(std::sin(rt*(std::numbers::pi))) * 2 * dt, 0, 1});
-        // stuff.models[0].transform = applyTranslation(stuff.models[0].transform, {static_cast<float>(std::cos(rt*(std::numbers::pi))) * 6 * dt, 0, 0, 1});
         stuff.models[0].transform = applyRotationY(stuff.models[0].transform, (std::numbers::pi/2) * dt);
         std::vector<uint32_t> colorBuffer = raster.rasterize(stuff, height, width);
         std::copy(colorBuffer.data(), colorBuffer.data() + (height*width), (uint32_t *)draw_surface->pixels);
-        // std::copy(points.data(), points.data() + (height*width), (uint32_t *)draw_surface->pixels);
-        // std::copy(m.albedo.data(), m.albedo.data() + (height*width), (uint32_t *)draw_surface->pixels);
-
+        
 
         SDL_Rect rect{.x = 0, .y = 0, .w = width, .h = height};
         SDL_BlitSurface(draw_surface, &rect, SDL_GetWindowSurface(window), &rect);

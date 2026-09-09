@@ -1,39 +1,39 @@
 #pragma once
 #include <renderer/typeDefs.hpp>
-//looks like we might have to cut these to avoid having to deal trig for now
-// void applyXRotation();
 
-// void applyYRotation();
-
-// void applyZRotation();
-
+/*
+    A minimal math library that just has exactly the math used in the rasterizer. mostly just here so the code isn't inline in the rasterizer
+*/
 namespace renderer {
 
-std::array<float, 16> applyTranslation(std::array<float, 16> const& transform, renderer::vec4 const& translation);
+//Adds a translation to a transform matrix
+std::array<float, 16> applyTranslation(std::array<float, 16> const& transform, renderer::vec4 const translation);
 
+//Adds an x axis rotation to a transform matrix
 std::array<float, 16> applyRotationX(std::array<float, 16> const& transform, float angle);
 
+//Adds an Y axis rotation to a transform matrix
 std::array<float, 16> applyRotationY(std::array<float, 16> const& transform, float angle);
 
+//Adds an Y axis rotation to a transform matrix
 std::array<float, 16> applyRotationZ(std::array<float, 16> const& transform, float angle);
 
-std::array<float, 16> applyRotation(std::array<float, 16> const& transform, renderer::vec4 const& direction, renderer::vec4 const& axis);
+//Adds a uniform scaling to a transform matrix
+std::array<float, 16> applyScaling(std::array<float, 16> const& transform, float const scalar);
 
-std::array<float, 16> applyScaling(std::array<float, 16> const& transform, float const &scalar);
+//Adds a non uniform scaling to a transfrom matrix
+std::array<float, 16> applyScaling(std::array<float, 16> const& transform, float const scalarX, float const scalarY, float const scalarZ);
 
-std::array<float, 16> applyScaling(std::array<float, 16> const& transform, float const &scalarX, float const &scalarY, float const &scalarZ);
+//Takes in a vector and outputs a normalised copy
+renderer::vec4 normalisedVector(renderer::vec4 const v);
 
-renderer::vec4 normalisedVector(renderer::vec4 const& v);
-
-//std::array<float, 16> getCameraTransform(renderer::vec4 const& cameraPos, renderer::vec4 const& direction, float const fov, float const near, float const far);
-
+//Applies a transform matrix to an entire model
 renderer::AlignedVec4 localToTransform(std::array<float, 16> const& transform, renderer::AlignedVec4 const& verticies);
 
-renderer::AlignedVec4 getProjectedCoordinates(AlignedVec4 const& verticies, vec4 const& cameraPos, float const fov, float const near, float const far, float const aspectRatio);
+//Transforms world space vertex buffer to NDC
+renderer::AlignedVec4 getProjectedCoordinates(AlignedVec4 const& verticies, vec4 const cameraPos, float const fov, float const near, float const far, float const aspectRatio);
 
+//Converts NDC to Raster coordinates
 renderer::AlignedVec4 getRasterCoords(AlignedVec4 const& verticies, int height, int width);
 
-//renderer::AlignedVec3 cameraToRasterTransform();
-
-//plan is to first convert eveything to raster space and to a z prepass
 }

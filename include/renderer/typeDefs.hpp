@@ -6,12 +6,11 @@
 #include <exception>
 
 namespace renderer {
-    //32 bit colour bitmasks
-    #define RED_BIT_MASK 0xF000
-    #define GREEN_BIT_MASK 0x0F00
-    #define BLUE_BIT_MASK 0x00F0
-    #define ALPHA_BIT_MASK 0x000F
 
+    //A custom allocator to ensure vectors are allocated to a 16 byte aligned memory address
+    //Because Neon Q registers are 128 bits, a 16 byte alignment is the best way to
+    //guarantee efficient SIMD
+    //for source see readme for a link to the stack overflow page I learned about this from
     template<typename ElementType, std::size_t ALIGNMENT_IN_BYTES>
     class AlignedAllocator{
         private:
@@ -48,11 +47,12 @@ namespace renderer {
             }
     };
 
-    template<typename T, std::size_t ALIGNMENT_IN_BYTES = 64>
+    template<typename T, std::size_t ALIGNMENT_IN_BYTES = 16>
     using AlignedVector = std::vector<T, AlignedAllocator<T, ALIGNMENT_IN_BYTES> >;
 
     //a simple 4 float vector
     //I choose to do it this way instead of with an array so I could index by xyzw/rgba component
+    //I added a way to index into it like a JS object with a char in the [] but I actually ended up not using anywhere though
     struct vec4 {
         float x;
         float y;
@@ -85,8 +85,9 @@ namespace renderer {
                     throw std::out_of_range("Accesing non-existent vec4 component");
             }
         }
-    }; //___attribute__((alligned(128)));
+    };
 
+    //a vector of 3 floats
     struct vec3 {
         float x;
         float y;
@@ -116,7 +117,6 @@ namespace renderer {
     };
 
     //a simple 2 float vector
-    //I choose to do it this way instead of with an array so I could index by xy/uv component
     struct vec2
     {
         float x;
@@ -138,24 +138,10 @@ namespace renderer {
                     throw std::out_of_range("Accesing non-existent vec2 component");
             }
         }
-    }; //___attribute__((alligned(128)));
-
-    // struct matrix4x4
-    // {
-    //     float x[4];
-    //     float y[4];
-    //     float z[4];
-    //     float w[4];
-    // };
-    
-    
-
-    struct vertex {
-        vec4 const position;
-        //UV
-        //Normal?
     };
 
+    //A face on the model
+    //has a position and uv index for each vertex in the face
     struct Face {
         std::array<int, 3> Verts;
         std::array<int, 3> UVs;
@@ -166,27 +152,32 @@ namespace renderer {
     using AlignedVec2 = AlignedVector<vec2, 16>;
     using AlignedFaces = AlignedVector<Face, 16>;
 
-    static_assert(std::is_same_v<AlignedVec4::value_type, vec4>);
-
+    //Struct for holding all of a models data in one place
+    //Has the following fields
+    //faceVertices - the faces of the model
+    //vertexPositions - the object space positions of each vertex in the model
+    //vertexUVs - the UV values of the vertexes in the model (Since this is generated from an obj file this is not guaranteed to be aligned with the positions)
+    //transform - a 4x4 matrix that stores the models object to world transform
+    //albedo a 1024x1024 png texture
     struct model {
-        AlignedVec4 vertexPositions;
-        //AlignedVec4 vertexNormals;
-        AlignedVec2 vertexUVs;
         AlignedFaces faceVerticies;
+        AlignedVec4 vertexPositions;
+        AlignedVec2 vertexUVs;
         std::array<float, 16> transform;
         std::vector<uint32_t> albedo;
     };
 
+    //A struct which contains all the objects in the scene
+    //has the following fields
+    //models - a list of the models in the scene
+    //cameraPos - a position vector for the camera
+    //fov - the camera field of view
+    //near - the near clipping plane distance
+    //far - the far clipping plane distance
     struct scene {
         std::vector<model> models;
         vec4 cameraPos;
         float fov, near, far;
         
     };
-
-    //potential helper functions worth having
-    //vectorToPixel()
-    //pixelToVector()
-    //normaliseVector()
-    //transformVector()
 }

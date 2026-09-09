@@ -51,12 +51,9 @@ namespace renderer {
     void parsePNG(char *const file, std::vector<uint32_t>& output) {
         int x,y,n;
         unsigned char *data = stbi_load(file, &x, &y, &n, 4);
-        //uint32_t *colours = reinterpret_cast<uint32_t *>(data);
-        //output.resize(x*y);
         output.assign(reinterpret_cast<uint32_t *>(data), reinterpret_cast<uint32_t *>(data) + (x*y));
         stbi_image_free(data);
         data = nullptr;
-        // stbi_image_free(colours);
     }
 
 }
