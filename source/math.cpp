@@ -3,10 +3,13 @@
 #include <cmath>
 #include <iostream>
 #include <numbers>
+#include <tracy/Tracy.hpp>
 
 namespace renderer {
 
 std::array<float, 16> applyTranslation(std::array<float, 16> const& transform, renderer::vec4 const translation) {
+    //TODO: ifdef debug
+    ZoneScoped;
     std::array<float, 16> resultsMatrix;
     std::copy(transform.begin(), transform.end(), resultsMatrix.begin());
     
@@ -19,6 +22,8 @@ std::array<float, 16> applyTranslation(std::array<float, 16> const& transform, r
 }
 
 std::array<float, 16> applyRotationX(std::array<float, 16> const& transform, float angle) {
+    //TODO: ifdef debug
+    ZoneScoped;
     float c = std::cos(angle);
     float s = std::sin(angle);
     std::array<float,16> rotation = {
@@ -69,7 +74,7 @@ std::array<float, 16> applyRotationX(std::array<float, 16> const& transform, flo
     resultC0 = vfmaq_laneq_f32(resultC0, transformC3, rotationC0, 3); //I ain't typing all that
     vst1q_f32(resultMatrix.data(), resultC0);
 
-    //load first row of rotation matrix and multiply in
+    //load second row of rotation matrix and multiply in
     rotationC1 = vld1q_f32(rotation.data()+4);
     resultC1 = vfmaq_laneq_f32(resultC1, transformC0, rotationC1, 0);
     resultC1 = vfmaq_laneq_f32(resultC1, transformC1, rotationC1, 1);
@@ -77,7 +82,7 @@ std::array<float, 16> applyRotationX(std::array<float, 16> const& transform, flo
     resultC1 = vfmaq_laneq_f32(resultC1, transformC3, rotationC1, 3);
     vst1q_f32(resultMatrix.data()+4, resultC1);
 
-    //load first row of rotation matrix and multiply in
+    //load third row of rotation matrix and multiply in
     rotationC2 = vld1q_f32(rotation.data()+8);
     resultC2 = vfmaq_laneq_f32(resultC2, transformC0, rotationC2, 0);
     resultC2 = vfmaq_laneq_f32(resultC2, transformC1, rotationC2, 1);
@@ -85,7 +90,7 @@ std::array<float, 16> applyRotationX(std::array<float, 16> const& transform, flo
     resultC2 = vfmaq_laneq_f32(resultC2, transformC3, rotationC2, 3);
     vst1q_f32(resultMatrix.data()+8, resultC2);
 
-    //load first row of rotation matrix and multiply in
+    //load fourth row of rotation matrix and multiply in
     rotationC3 = vld1q_f32(rotation.data()+12);
     resultC3 = vfmaq_laneq_f32(resultC3, transformC0, rotationC3, 0);
     resultC3 = vfmaq_laneq_f32(resultC3, transformC1, rotationC3, 1);
@@ -97,6 +102,8 @@ std::array<float, 16> applyRotationX(std::array<float, 16> const& transform, flo
 }
 
 std::array<float, 16> applyRotationY(std::array<float, 16> const& transform, float angle) {
+    //TODO: ifdef debug
+    ZoneScoped;
     float c = std::cos(angle);
     float s = std::sin(angle);
     
@@ -168,6 +175,8 @@ std::array<float, 16> applyRotationY(std::array<float, 16> const& transform, flo
 }
 
 std::array<float, 16> applyRotationZ(std::array<float, 16> const& transform, float angle) {
+    //TODO: ifdef debug
+    ZoneScoped;
     float c = std::cos(angle);
     float s = std::sin(angle);
     
@@ -247,6 +256,8 @@ std::array<float, 16>  applyScaling(std::array<float, 16> const& transform, floa
 
 //given an existing transform matrix and scaling factor per component apply the scaling
 std::array<float, 16>  applyScaling(std::array<float, 16> const& transform, float const scalarX, float const scalarY, float const scalarZ) {
+    //TODO: ifdef debug
+    ZoneScoped;
     std::array<float, 16> resultMatrix;
     
     std::array<float, 16> scaleMatrix;
@@ -315,6 +326,8 @@ std::array<float, 16>  applyScaling(std::array<float, 16> const& transform, floa
 };
 
 renderer::vec4 normalisedVector(renderer::vec4 const v) {
+    //TODO: ifdef debug
+    ZoneScoped;
     renderer::vec4 result;
     float32x4_t vec = vld1q_f32(&v.x);
     float32x4_t temp = vmovq_n_f32(0);
@@ -332,6 +345,8 @@ renderer::vec4 normalisedVector(renderer::vec4 const v) {
 };
 
 renderer::AlignedVec4 localToTransform(std::array<float, 16> const& transform, renderer::AlignedVec4 const& verticies){
+    //TODO: ifdef debug
+    ZoneScoped;
     renderer::AlignedVec4 worldVerticies(verticies.size(), {0, 0, 0, 0});
     
     //loading our uniform transform matrix
@@ -404,6 +419,8 @@ renderer::AlignedVec4 localToTransform(std::array<float, 16> const& transform, r
 
 //a helper function for dividing the perspective transformed matrix by w
 renderer::AlignedVec4 divideW(renderer::AlignedVec4 const& cartesianVerticies) {
+    //TODO: ifdef debug
+    ZoneScoped;
     renderer::AlignedVec4 homogenousVerticies(cartesianVerticies.size(), {0, 0, 0, 0});
     
     float32x4_t resultC0;
@@ -451,6 +468,8 @@ renderer::AlignedVec4 divideW(renderer::AlignedVec4 const& cartesianVerticies) {
 }
 
 renderer::AlignedVec4 getProjectedCoordinates(AlignedVec4 const& verticies, vec4 const cameraPos, float const fov, float const near, float const far, float const aspectRatio) {
+    //TODO: ifdef debug
+    ZoneScoped;
     vec4 cameraOffset = {cameraPos.x * -1,cameraPos.y * -1, cameraPos.z * -1, 1.0};
     
     std::array<float, 16> cameraTransform = {
@@ -488,6 +507,8 @@ renderer::AlignedVec4 getProjectedCoordinates(AlignedVec4 const& verticies, vec4
 };
 
 renderer::AlignedVec4 getRasterCoords(AlignedVec4 const& verticies, int height, int width) {
+    //TODO: ifdef debug
+    ZoneScoped;
     size_t count = verticies.size();
     AlignedVec4 rasterVerts(count, {0, 0, 0, 0});
    
@@ -534,4 +555,23 @@ renderer::AlignedVec4 getRasterCoords(AlignedVec4 const& verticies, int height, 
     return rasterVerts;
 };
 
+float length(vec4 const v) {
+    //TODO: ifdef debug
+    ZoneScoped;
+    renderer::vec4 result;
+    float32x4_t vec = vld1q_f32(&v.x);
+    float32x4_t temp = vmovq_n_f32(0);
+
+    //getting the magnitude of the vector
+    temp = vmulq_f32(vec, vec);
+    float sum = vaddvq_f32(temp);
+    sum = std::sqrt(sum);
+    return sum;
+}
+
+//dot and cross product for lighting???
+
+// uint32_t colorLerp(uint32_t const a, uint32_t const b, float const t) {
+//     uint32x4_t aRGBA = {(a & 0xFF)}
+// };
 }

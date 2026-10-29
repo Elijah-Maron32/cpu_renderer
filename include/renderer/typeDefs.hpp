@@ -4,6 +4,7 @@
 #include <limits>
 #include <new>
 #include <exception>
+#include <arm_neon.h>
 
 namespace renderer {
 
@@ -52,12 +53,38 @@ namespace renderer {
 
     //a simple 4 float vector
     //I choose to do it this way instead of with an array so I could index by xyzw/rgba component
-    //I added a way to index into it like a JS object with a char in the [] but I actually ended up not using anywhere though
+    //I added a way to index into it like a JS object with a char in the [] but I actually ended up not using that anywhere
+    //I also added some basic math operator overloads to make using the type easier
     struct vec4 {
         float x;
         float y;
         float z;
         float w;
+        
+        vec4& operator+=(vec4 other) {
+            float32x4_t a = vld1q_f32(reinterpret_cast<float *>(this));
+            float32x4_t b = vld1q_f32(reinterpret_cast<float *>(&other));
+            a = vaddq_f32(a, b);
+            vst1q_f32(reinterpret_cast<float *>(this), a);
+            return *this;
+        } 
+        
+       
+        vec4& operator-=(vec4 other) {
+            float32x4_t a = vld1q_f32(reinterpret_cast<float *>(this));
+            float32x4_t b = vld1q_f32(reinterpret_cast<float *>(&other));
+            a = vsubq_f32(a, b);
+            vst1q_f32(reinterpret_cast<float *>(this), a);
+            return *this;
+        }
+
+        vec4& operator*=(float scalar) {
+            float32x4_t a = vld1q_f32(reinterpret_cast<float *>(this));
+            float32x4_t b = vmovq_n_f32(scalar);
+            a = vmulq_f32(a,b);
+            vst1q_f32(reinterpret_cast<float *>(this), a);
+            return *this;
+        }
 
         float& operator[](char const component) {
             switch (component) {
@@ -86,6 +113,21 @@ namespace renderer {
             }
         }
     };
+
+    inline vec4 operator+(vec4 left, vec4 const& right) {
+            left += right;
+            return left;
+    }
+
+   inline vec4 operator-(vec4 left, vec4 const& right) {
+            left -= right;
+            return left;
+    } 
+
+   inline vec4 operator*(vec4 left, float const& right) {
+            left *= right;
+            return left;
+    } 
 
     //a vector of 3 floats
     struct vec3 {

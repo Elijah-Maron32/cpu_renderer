@@ -16,6 +16,7 @@ namespace renderer{
         */
         std::vector<uint32_t> rasterize(renderer::scene const &scene, int32_t height, int32_t width);
 
+        //Maybe add an explicit constructor with height and width args so the vector can be resized ahead of time
         rasterizer() = default;
 
         private:
@@ -23,11 +24,9 @@ namespace renderer{
         std::vector<uint32_t> colorBuffer;
         //buffer containing the depth value of the closest object to the camera at each pixel
         std::vector<float> depthBuffer;
-        //target resolution height
+        //target resolution dimensions
         int32_t height;
-        //target resolution width
         int32_t width;
-        //
         float aspectRatio;
 
         /* drawTri

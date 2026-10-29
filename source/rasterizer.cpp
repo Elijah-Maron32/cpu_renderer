@@ -3,12 +3,13 @@
 #include <renderer/typeDefs.hpp>
 #include <iostream>
 #include <limits>
-
+#include <tracy/Tracy.hpp>
 
 namespace renderer {
 
 
     std::vector<uint32_t> rasterizer::rasterize(renderer::scene const &scene, int32_t height, int32_t width) {
+        //handle potential buffer resizes
         if (this->height != height && this->width!=width) {
             this->colorBuffer.resize(height*width);
             this->depthBuffer.resize(height*width);
@@ -30,6 +31,8 @@ namespace renderer {
                 worldVerts, scene.cameraPos, scene.fov, scene.near, scene.far, aspectRatio);
             //Clip space to raster co-ordinates
             renderer::AlignedVec4 rasterVerts = renderer::getRasterCoords(projectedVerts, height, width);
+            
+            //--Rasterize--
             for(renderer::Face face : object.faceVerticies) {
                 drawTri(rasterVerts[face.Verts[0]], rasterVerts[face.Verts[1]], rasterVerts[face.Verts[2]], face, object);
             }
@@ -57,7 +60,7 @@ namespace renderer {
         //a is the partial derivative with regards to x
         //b is the partial derivative with regards to y
         //c is our constant term
-        //If you want a good explanation of the math check the references in the readme for 'The Barycentric conspiracy"
+        //If you want a good explanation of the math check the references in the readme for "The Barycentric conspiracy"
         int32_t a = v0[1] - v1[1];
         int32_t b = v1[0] - v0[0];
         int32_t c = (((v0[0]*v1[1]) + 8) >> 4) - (((v0[1]*v1[0]) + 8) >> 4);
@@ -109,11 +112,12 @@ namespace renderer {
         float v1v;
         float v2v;
 
+        //N.B.: oneOnArea not const??? should maybe be const
         void calculateConstants(vec4 const v0, vec4 const v1, vec4 const v2, model const &m, Face const f, float oneOnArea) {
             //We prefactor in 1/area to avoid factoring them in later at every pixel when we interpolate
             //the area gets canceled out by the fact we don't normalise our barycentric weights during interpolation
             //everything is interpolated in terms of 1/w
-            //(which is the value of z in camera space) because that is actually
+            //(w is the value of z in camera space) because that is actually
             //a linear relationship in screen space because of the perpective transformation
             v0w = 1/v0.w * oneOnArea;
             v1w = 1/v1.w * oneOnArea;
@@ -131,8 +135,9 @@ namespace renderer {
     };
 
     
-    void rasterizer::drawTri(vec4 const v0, vec4 const v1, vec4 const v2, Face const face, model const &m) {
- 
+    void rasterizer::drawTri(vec4 const v0, vec4 const v1, vec4 const v2, Face const face, model const &m) { 
+        //TODO: ifdef debug
+        ZoneScoped;
         //This is a conversion from float to fixed point
         //The fixed point ints use 4 fractional bits
         //loading values into registers
@@ -160,13 +165,13 @@ namespace renderer {
         
         //storing into usable arrays
         std::array<int32_t,2> p0;
-        vst1_s32(p0.data(), P0);
         std::array<int32_t,2> p1;
-        vst1_s32(p1.data(), P1);
         std::array<int32_t,2> p2;
+        vst1_s32(p0.data(), P0);
+        vst1_s32(p1.data(), P1);
         vst1_s32(p2.data(), P2);
         
-        //Construction our bounding box
+        //Constructing a bounding box
         std::array<int32_t,2> minV;
         int32x2_t zero = vmov_n_s32(0);
         int32x2_t min = vmin_s32(P0, P1);
@@ -183,11 +188,11 @@ namespace renderer {
         max = vmin_s32(max, screen);
         vst1_s32(maxV.data(), max);
 
-        //this is effectivley a round to ceiling (As far as I know this should also kind of approximate a top left fill rule but I need to double check)
+        //this is a round to ceiling
         minV[0] = ((minV[0] + 15)  & (~15));
         minV[1] = ((minV[1] + 15)  & (~15));
         
-        //Check for degenerate triangles (kind of also back face culling since this is a signed area caluclation)
+        //Check for degenerate triangles (also does back face culling since back facing triangles have negative areas)
         int area = computeArea(p2, p1, p0);
         if (area < 0) {
             return;
@@ -239,7 +244,9 @@ namespace renderer {
 
 
     void rasterizer::drawPixel(int32_t x, int32_t y, int32x4_t const w0, int32x4_t const w1, int32x4_t const w2, uint32x4_t const mask, model const &m, triConstants const c){
-
+        //TODO: ifdef debug
+        ZoneScoped;
+        //N.B.: doesn't round?? should maybe round ngl. Though it might be correct because of where we want to offset our sampling???
         //converts back from fixed point
         int normalX = (x) >> 4;
         int normalY = (y) >> 4;
@@ -260,10 +267,10 @@ namespace renderer {
         //Could precompute an aproximate value for 1/16?
         float32x4_t sixteen = vmovq_n_f32(1.0/16.0);
         float32x4_t L0 = vcvtq_f32_s32(w0);
-        L0 = vmulq_f32(L0, sixteen);
         float32x4_t L1 = vcvtq_f32_s32(w1);
-        L1 = vmulq_f32(L1, sixteen);
         float32x4_t L2 = vcvtq_f32_s32(w2);
+        L0 = vmulq_f32(L0, sixteen);
+        L1 = vmulq_f32(L1, sixteen);
         L2 = vmulq_f32(L2, sixteen);
 
         //load vertex 1/W * 1/area
@@ -348,6 +355,8 @@ namespace renderer {
         //get actual on texture co-ordinate value
         float32x4_t texWidth = vmovq_n_f32(1024);
         pU = vmulq_f32(pU, texWidth);
+        //Converting to int with neon truncates so we manually add a rounding factor
+        pU = vaddq_f32(pU, vmovq_n_f32(0.5));
         int32x4_t texU = vcvtq_s32_f32(pU);
 
         //calculate pixel v/w
@@ -360,6 +369,8 @@ namespace renderer {
         //get actual on texture co-ordinate value
         float32x4_t texHeight = vmovq_n_f32(1024);
         pV = vmulq_f32(pV, texHeight);
+        //Same rounding as logic as U
+        pV = vaddq_f32(pV, vmovq_n_f32(0.5));
         int32x4_t texV = vcvtq_s32_f32(pV);
 
         //if we wanted to do our colour writes the same way we do our depth writes,

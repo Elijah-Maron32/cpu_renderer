@@ -1,3 +1,4 @@
+// #define TRACY_ENABLE
 #include <iostream>
 #include "SDL.h"
 #include <chrono>
@@ -6,6 +7,8 @@
 #include <cmath>
 #include <numbers>
 #include <renderer/rasterizer.hpp>
+#include <tracy/Tracy.hpp>
+
 
 #define FPS 60.0
 #define TARGET_DT 1.0 / FPS
@@ -13,18 +16,21 @@
 using namespace renderer;
 
 int main(int argc, char* args[]){
-
-    renderer::vec4 const cameraPos = {0,1,1,1};
+    #ifdef TRACY_ENABLE
+        std::cout << "tracy running";
+    #endif
+    vec4 cameraPos = {0,1,1,1};    
+    vec4 cameraVel = {0,0,0,0};
     float const fov = 90, near = 1, far = 5;
 
-    renderer::model m;
-    renderer::model m1;
+    model m;
+    model m1;
 
     parsePNG("necoarctexture.png", m.albedo);
     parsePNG("cubeTexture.png", m1.albedo);
 
-    renderer::parseOBJFile("necoarc.obj", m.vertexPositions, m.faceVerticies, m.vertexUVs);
-    renderer::parseOBJFile("cube.obj", m1.vertexPositions, m1.faceVerticies, m1.vertexUVs);
+    parseOBJFile("necoarc.obj", m.vertexPositions, m.faceVerticies, m.vertexUVs);
+    parseOBJFile("cube.obj", m1.vertexPositions, m1.faceVerticies, m1.vertexUVs);
 
     m.transform = {
         1, 0, 0, 0,
@@ -40,23 +46,23 @@ int main(int argc, char* args[]){
         0, 0, 0, 1
     };
 
-    renderer::vec4 translation = {0, 0, -2.5, 1};
-    renderer::vec4 translation1 = {0, 1, -2.5, 1};
+    vec4 translation = {0, 0, -2.5, 1};
+    vec4 translation1 = {0, 1, -2.5, 1};
 
 
-
+    //TODO: potential change if ditching pure functional constraints
     m.transform = applyTranslation(m.transform, translation);
     
-    m1.transform = renderer::applyRotationY(m1.transform, std::numbers::pi/4);
+    m1.transform = applyRotationY(m1.transform, std::numbers::pi/4);
     m1.transform = applyTranslation(m1.transform, translation1);
 
 
 
-
-    std::cout << "output\n";
+    //TODO: Consider a debug ifdef for logging
+    //std::cout << "output\n";
     
-    renderer::scene stuff;
-    renderer::rasterizer raster;
+    scene stuff;
+    rasterizer raster;
     stuff.cameraPos = cameraPos;
     stuff.fov = fov;
     stuff.far = far;
@@ -95,7 +101,53 @@ int main(int argc, char* args[]){
             case SDL_MOUSEMOTION:
                 mouse_x = event.motion.x;
                 mouse_y = event.motion.y;
-                break;   
+                break;
+            
+            // TODO: change this code so that movement is more stable
+            // case SDL_KEYDOWN:
+            //     switch(event.key.keysym.sym) {
+            //         case SDLK_w:
+            //             cameraVel += vec4{0, 0, 1, 0};
+            //             break;
+            //         case SDLK_s:
+            //             cameraVel += vec4{0, 0, -1, 0};
+            //             break;
+            //         case SDLK_a:
+            //             cameraVel += vec4{-1, 0, 0, 0};
+            //             break;
+            //         case SDLK_d:
+            //             cameraVel += vec4{1, 0, 0, 0};
+            //             break;
+            //         case SDLK_SPACE:
+            //             cameraVel += vec4{0, 1, 0, 0};
+            //             break;
+            //         case SDLK_LSHIFT:
+            //             cameraVel += vec4{0, -1, 0, 0};
+            //             break;
+            //     }
+            //     break;
+            // case SDL_KEYUP:
+            //     switch(event.key.keysym.sym) {
+            //         case SDLK_w:
+            //             cameraVel += vec4{0, 0, -1, 0};
+            //             break;
+            //         case SDLK_s:
+            //             cameraVel += vec4{0, 0, 1, 0};
+            //             break;
+            //         case SDLK_a:
+            //             cameraVel += vec4{1, 0, 0, 0};
+            //             break;
+            //         case SDLK_d:
+            //             cameraVel += vec4{-1, 0, 0, 0};
+            //             break;
+            //         case SDLK_SPACE:
+            //             cameraVel += vec4{0, -1, 0, 0};
+            //             break;
+            //         case SDLK_LSHIFT:
+            //             cameraVel += vec4{0, 1, 0, 0};
+            //             break;
+            //     }
+            //     break;
         }
 
         if (!running)
@@ -111,13 +163,22 @@ int main(int argc, char* args[]){
 		float dt = std::chrono::duration_cast<std::chrono::duration<float>>(now - prev_frame).count();
 		float rt = std::chrono::duration_cast<std::chrono::duration<float>>(now - runtime).count();
         prev_frame = now;
+
+        //E.G.: potential idea for frame lockstep changes
+        //for(;dt < 0.16;dt = std::chrono::duration_cast<std::chrono::duration<float>>(n - prev_frame).count()){
+        //    auto n = clock::now()
+        //}
         
 
-        std::cout << dt << std::endl;
+        //std::cout << dt << std::endl;
         
         
         stuff.models[0].transform = applyTranslation(stuff.models[0].transform, {0, static_cast<float>(std::sin(rt*(std::numbers::pi))) * 2 * dt, 0, 1});
         stuff.models[0].transform = applyRotationY(stuff.models[0].transform, (std::numbers::pi/2) * dt);
+        
+        if (length(cameraVel) > 0)
+            stuff.cameraPos += normalisedVector(cameraVel) * dt;
+
         std::vector<uint32_t> colorBuffer = raster.rasterize(stuff, height, width);
         std::copy(colorBuffer.data(), colorBuffer.data() + (height*width), (uint32_t *)draw_surface->pixels);
         
@@ -126,6 +187,7 @@ int main(int argc, char* args[]){
         SDL_BlitSurface(draw_surface, &rect, SDL_GetWindowSurface(window), &rect);
 
         SDL_UpdateWindowSurface(window);
+        FrameMark;
     }
 }
 

@@ -36,4 +36,6 @@ renderer::AlignedVec4 getProjectedCoordinates(AlignedVec4 const& verticies, vec4
 //Converts NDC to Raster coordinates
 renderer::AlignedVec4 getRasterCoords(AlignedVec4 const& verticies, int height, int width);
 
+//gets length of the vector passed to it
+float length(vec4 const v);
 }
